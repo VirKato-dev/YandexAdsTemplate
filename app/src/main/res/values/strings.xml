@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name" translatable="false">Yandex Ads Template</string>
+    <string name="ads_unit_banner" translatable="false">R-M-2244071-1</string>
+    <string name="ads_unit_page" translatable="false">R-M-2244071-3</string>
+    <string name="ads_unit_reward" translatable="false">R-M-2244071-4</string>
+</resources>
