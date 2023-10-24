@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Yandex Ads Template</string>
+    <string name="label_balance">Баланс:</string>
+    <string name="b_withdraw">Получить накопленное</string>
+    <string name="b_page_show">Страничная</string>
+    <string name="b_rewarded_show">Наградная</string>
+    <string name="t_phone_number">Номер телефона</string>
+</resources>

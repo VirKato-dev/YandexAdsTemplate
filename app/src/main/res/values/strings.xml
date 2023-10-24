@@ -1,6 +1,11 @@
 <resources>
-    <string name="app_name" translatable="false">Yandex Ads Template</string>
+    <string name="app_name">Yandex Ads Template</string>
     <string name="ads_unit_banner" translatable="false">R-M-2244071-1</string>
     <string name="ads_unit_page" translatable="false">R-M-2244071-3</string>
     <string name="ads_unit_reward" translatable="false">R-M-2244071-4</string>
+    <string name="label_balance">Balance:</string>
+    <string name="b_withdraw">Withdrawal all</string>
+    <string name="b_page_show">Interstitial Ads</string>
+    <string name="b_rewarded_show">Rewarded Ads</string>
+    <string name="t_phone_number">Phone number</string>
 </resources>

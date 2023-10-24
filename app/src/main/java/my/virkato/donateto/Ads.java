@@ -19,7 +19,21 @@ import com.yandex.mobile.ads.interstitial.InterstitialAdLoader;
 import com.yandex.mobile.ads.rewarded.RewardedAdLoadListener;
 import com.yandex.mobile.ads.rewarded.RewardedAdLoader;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.HashMap;
+import java.util.Map;
+
+
 public class Ads {
+
+    /**
+     * Оплата за просмотры рекламы в соответствующем рекламном блоке
+     */
+    private static Map<String, BigDecimal> prices = new HashMap<>();
 
     private Ads() {
     }
@@ -50,6 +64,8 @@ public class Ads {
         banner.setAdSize(BannerAdSize.stickySize(banner.getContext(), maxWidth));
         banner.loadAd(new AdRequest.Builder().build());
         banner.setBannerAdEventListener(new BannerAdEventListener() {
+            // за баннер не плюсуем баланс, т.к. нет гарантии, что баннер виден на экране
+
             @Override
             public void onAdLoaded() {
                 Log.d("banner", "onAdLoaded: !");
@@ -82,6 +98,12 @@ public class Ads {
                     data = impressionData.getRawData();
                 }
                 Log.d("banner", "onImpression: " + data);
+                try {
+                    // вытащили из данных о показываемой рекламе
+                    setPrice(unitId, new BigDecimal(new JSONObject(data).getString("revenue")));
+                } catch (JSONException e) {
+                    Log.e("banner", e.getLocalizedMessage());
+                }
             }
         });
     }
@@ -110,5 +132,28 @@ public class Ads {
         RewardedAdLoader adLoader = new RewardedAdLoader(context);
         adLoader.setAdLoadListener(adLoadListener);
         adLoader.loadAd(new AdRequestConfiguration.Builder(unitId).build());
+    }
+
+    /**
+     * Получить цену за просмотр рекламы в указанном рекламном блоке
+     *
+     * @param unitId рекламный блок
+     * @return цена
+     */
+    public static BigDecimal getPrice(String unitId) {
+        BigDecimal price = prices.get(unitId);
+        if (price == null) price = BigDecimal.ZERO;
+        // вернём для расчётов только половину цены
+        return price.divide(BigDecimal.valueOf(2), RoundingMode.HALF_DOWN);
+    }
+
+    /**
+     * Установить цену за просмотр рекламы в указанном рекламном блоке
+     *
+     * @param unitId рекламный блок
+     * @param price  цена
+     */
+    public static void setPrice(String unitId, BigDecimal price) {
+        prices.put(unitId, price);
     }
 }

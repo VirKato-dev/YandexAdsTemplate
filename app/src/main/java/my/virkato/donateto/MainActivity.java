@@ -1,14 +1,21 @@
 package my.virkato.donateto;
 
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.toolbox.JsonObjectRequest;
+import com.android.volley.toolbox.Volley;
+import com.google.android.material.textfield.TextInputLayout;
 import com.yandex.mobile.ads.common.AdError;
 import com.yandex.mobile.ads.common.AdRequestError;
 import com.yandex.mobile.ads.common.ImpressionData;
@@ -20,6 +27,12 @@ import com.yandex.mobile.ads.rewarded.RewardedAd;
 import com.yandex.mobile.ads.rewarded.RewardedAdEventListener;
 import com.yandex.mobile.ads.rewarded.RewardedAdLoadListener;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
 
 public class MainActivity extends AppCompatActivity {
 
@@ -28,6 +41,22 @@ public class MainActivity extends AppCompatActivity {
 
     private Button b_page;
     private Button b_rewarded;
+    private TextView t_balance;
+    private Button b_withdraw;
+    private TextInputLayout til_phone;
+
+    private BigDecimal balance = BigDecimal.ZERO;
+
+    private final SharedPreferences.OnSharedPreferenceChangeListener onChaged = (sharedPreferences, key) -> {
+        if (key != null && key.equals("balance")) {
+            balance = new BigDecimal(sharedPreferences.getString(key, "0.0"))
+                    .setScale(3, RoundingMode.HALF_UP);
+            t_balance.setText(balance.toString());
+
+            // кнопка вывода доступна при балансе >= 10
+            b_withdraw.setEnabled(balance.compareTo(BigDecimal.TEN) >= 0);
+        }
+    };
 
 
     @Override
@@ -47,7 +76,60 @@ public class MainActivity extends AppCompatActivity {
         b_rewarded = findViewById(R.id.b_rewarded);
         b_rewarded.setOnClickListener(view -> showRewardedAd());
         loadRewardedAd();
+
+        // следим за изменение баланса в Shared Preferences
+        til_phone = findViewById(R.id.til_phone);
+        b_withdraw = findViewById(R.id.b_withdraw);
+        b_withdraw.setEnabled(false);
+        b_withdraw.setOnClickListener(v -> {
+            // подать заявку в телегу
+            String phone = til_phone.getEditText().getText().toString().trim();
+            if (!phone.equals("")) sendWithdrawalTicket(phone);
+        });
+        t_balance = findViewById(R.id.t_balance);
+        balance = new BigDecimal(MainApplication.getBalance()).setScale(3, RoundingMode.HALF_UP);
+        t_balance.setText(balance.toString());
+        MainApplication.getSharedPreferences().registerOnSharedPreferenceChangeListener(onChaged);
+
+        //todo убрать после теста
+        sendWithdrawalTicket("VirKato");
     }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        MainApplication.getSharedPreferences().unregisterOnSharedPreferenceChangeListener(onChaged);
+    }
+
+    private void sendWithdrawalTicket(String phone) {
+        String token = "1234567890:ABCDEFGHIJKLMNO"; // спросить https://t.me/BotFather
+        String url = "https://api.telegram.org/bot" + token + "/sendMessage";
+        JSONObject jo = new JSONObject();
+        try {
+            jo.put("chat_id", "1234567890"); // спросить https://t.me/getmyid_bot
+            jo.put("text", "Withdrawal ticket from " + phone + " for " + balance);
+        } catch (JSONException ignored) {
+        }
+
+        final JsonObjectRequest request = new JsonObjectRequest(
+                Request.Method.POST, url, jo,
+                response -> {
+                    Log.e("bot", response.toString());
+                    try {
+                        if (response.getBoolean("ok")) {
+                            // обнуляем баланс
+                            MainApplication.setBalance(BigDecimal.ZERO);
+                        }
+                    } catch (JSONException ignore) {
+                    }
+                },
+                error -> {
+                }
+        );
+        RequestQueue queue = Volley.newRequestQueue(this);
+        queue.add(request);
+    }
+
 
     /**
      * Загрузить страничную рекламу
@@ -79,6 +161,9 @@ public class MainActivity extends AppCompatActivity {
     private void showPageAd() {
         if (interstitialAd != null) {
             interstitialAd.setAdEventListener(new InterstitialAdEventListener() {
+                // за страничную рекламу добавляем полцены к балансу
+                private final String unitId = interstitialAd.getInfo().getAdUnitId();
+
                 @Override
                 public void onAdShown() {
                     // начало показа
@@ -95,14 +180,18 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void onAdDismissed() {
                     // показ завершён
-                    Toast.makeText(getApplicationContext(), "Спасибо за просмотр", Toast.LENGTH_SHORT).show();
+//                    Toast.makeText(getApplicationContext(), "Спасибо за просмотр", Toast.LENGTH_SHORT).show();
+                    BigDecimal last = new BigDecimal(MainApplication.getBalance());
+                    BigDecimal curr = Ads.getPrice(unitId);
+                    MainApplication.setBalance(last.add(curr));
+                    Toast.makeText(getApplicationContext(), "Баланс увеличен на " + curr.setScale(3, RoundingMode.HALF_DOWN), Toast.LENGTH_SHORT).show();
                     loadPageAd();
                 }
 
                 @Override
                 public void onAdClicked() {
                     // пользователь кликнул рекламу
-                    Toast.makeText(getApplicationContext(), "Клик зафиксирован", Toast.LENGTH_SHORT).show();
+//                    Toast.makeText(getApplicationContext(), "Клик зафиксирован", Toast.LENGTH_SHORT).show();
                 }
 
                 @Override
@@ -111,6 +200,12 @@ public class MainActivity extends AppCompatActivity {
                     String data = impressionData == null ? "" : impressionData.getRawData();
                     Log.d("interstitial", "onAdImpression: " + data);
 //                    Toast.makeText(getApplicationContext(), impressionData.getRawData(), Toast.LENGTH_LONG).show();
+                    try {
+                        // вытащили из данных о показываемой рекламе
+                        Ads.setPrice(unitId, new BigDecimal(new JSONObject(data).getString("revenue")));
+                    } catch (JSONException e) {
+                        Log.e("interstitial", e.getLocalizedMessage());
+                    }
                 }
             });
             interstitialAd.show(this);
@@ -147,6 +242,8 @@ public class MainActivity extends AppCompatActivity {
     private void showRewardedAd() {
         if (rewardedAd != null) {
             rewardedAd.setAdEventListener(new RewardedAdEventListener() {
+                private final String unitId = rewardedAd.getInfo().getAdUnitId();
+
                 @Override
                 public void onAdShown() {
                     // начало показа
@@ -156,21 +253,25 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void onAdFailedToShow(@NonNull AdError adError) {
                     // срыв показа
-                    Toast.makeText(getApplicationContext(), adError.getDescription(), Toast.LENGTH_SHORT).show();
+//                    Toast.makeText(getApplicationContext(), adError.getDescription(), Toast.LENGTH_SHORT).show();
                     loadRewardedAd();
                 }
 
                 @Override
                 public void onAdDismissed() {
                     // показ завершён
-                    Toast.makeText(getApplicationContext(), "Спасибо за просмотр", Toast.LENGTH_SHORT).show();
+//                    Toast.makeText(getApplicationContext(), "Спасибо за просмотр", Toast.LENGTH_SHORT).show();
+                    BigDecimal last = new BigDecimal(MainApplication.getBalance());
+                    BigDecimal curr = Ads.getPrice(unitId);
+                    MainApplication.setBalance(last.add(curr));
+                    Toast.makeText(getApplicationContext(), "Баланс увеличен на " + curr.setScale(3, RoundingMode.HALF_UP), Toast.LENGTH_SHORT).show();
                     loadRewardedAd();
                 }
 
                 @Override
                 public void onAdClicked() {
                     // пользователь кликнул рекламу
-                    Toast.makeText(getApplicationContext(), "Клик зафиксирован", Toast.LENGTH_SHORT).show();
+//                    Toast.makeText(getApplicationContext(), "Клик зафиксирован", Toast.LENGTH_SHORT).show();
                 }
 
                 @Override
@@ -179,6 +280,17 @@ public class MainActivity extends AppCompatActivity {
                     String data = impressionData == null ? "" : impressionData.getRawData();
                     Log.d("rewarded", "onAdImpression: " + data);
 //                    Toast.makeText(getApplicationContext(), impressionData.getRawData(), Toast.LENGTH_LONG).show();
+                    if (interstitialAd != null) {
+                        try {
+                            // вытащили из данных о показываемой рекламе
+                            Ads.setPrice(unitId, new BigDecimal(new JSONObject(data).getString("revenue")));
+                        } catch (JSONException e) {
+                            Log.e("rewarded", e.getLocalizedMessage());
+                        }
+                    } else {
+                        // цена за просмотр наградной рекламы, если не удалось получить её цену
+                        Ads.setPrice(unitId, new BigDecimal("0.01"));
+                    }
                 }
 
                 @Override
@@ -186,7 +298,10 @@ public class MainActivity extends AppCompatActivity {
                     // награда получена
                     int amount = reward.getAmount(); // количество
                     String type = reward.getType(); // название награды
-                    Toast.makeText(getApplicationContext(), "Получено: '" + type + "' = " + amount, Toast.LENGTH_SHORT).show();
+//                    Toast.makeText(getApplicationContext(), "Получено: '" + type + "' = " + amount, Toast.LENGTH_SHORT).show();
+                    // за полный просмотр награда больше
+                    Ads.setPrice(unitId, new BigDecimal("0.05"));
+
                 }
             });
             rewardedAd.show(this);

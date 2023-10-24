@@ -5,7 +5,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    tools:context=".MainActivity" >
+    android:padding="5dp"
+    tools:context=".MainActivity">
 
     <com.yandex.mobile.ads.banner.BannerAdView
         android:id="@+id/yandex_ads_banner"
@@ -16,12 +17,56 @@
         android:id="@+id/b_page"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Страничная" />
+        android:text="@string/b_page_show" />
 
     <Button
         android:id="@+id/b_rewarded"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Наградная" />
+        android:text="@string/b_rewarded_show" />
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/til_phone"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <com.google.android.material.textfield.TextInputEditText
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/t_phone_number" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="10dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/t_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="5dp"
+            android:layout_marginLeft="5dp"
+            android:text="@string/label_balance"
+            android:textSize="20sp" />
+
+        <TextView
+            android:id="@+id/t_balance"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/b_withdraw"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:text="@string/b_withdraw" />
 
 </LinearLayout>
