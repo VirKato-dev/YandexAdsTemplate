@@ -84,7 +84,10 @@ public class MainActivity extends AppCompatActivity {
         b_withdraw.setOnClickListener(v -> {
             // подать заявку в телегу
             String phone = til_phone.getEditText().getText().toString().trim();
-            if (!phone.equals("")) sendWithdrawalTicket(phone);
+            if (!phone.equals("") && balance.compareTo(BigDecimal.valueOf(100)) >= 0) {
+                // если указан номер телефона и баланс >= 100
+                sendWithdrawalTicket(phone);
+            }
         });
         t_balance = findViewById(R.id.t_balance);
         balance = new BigDecimal(MainApplication.getBalance()).setScale(3, RoundingMode.HALF_UP);
