@@ -45,22 +45,12 @@ public class MainActivity extends AppCompatActivity {
     private SharedPreferences sp;
 
     private final SharedPreferences.OnSharedPreferenceChangeListener onChaged = (sharedPreferences, key) -> {
-        if (key != null && key.equals("balance")) {
-            balance = new BigDecimal(sharedPreferences.getString(key, "0.0"))
-                    .setScale(3, RoundingMode.HALF_UP);
-            t_balance.setText(balance.toString());
-
-            // кнопка вывода доступна при балансе >= 100
-            b_withdraw.setEnabled(balance.compareTo(BigDecimal.valueOf(100)) >= 0);
-        }
+        if (key != null && key.equals("balance")) showBalance();
     };
 
     private Ads ads;
 
     private final Ads.CommonAdEventListener interstitialListener = new Ads.CommonAdEventListener() {
-        //todo вынести в Ads
-        private final String unitId = getString(R.string.ads_unit_page);
-
         @Override
         public void onAdLoaded(Ads.AdUnit ad) {
             interstitialAd = ad;
@@ -85,7 +75,7 @@ public class MainActivity extends AppCompatActivity {
         public void onAdDismissed() {
             // показ завершён
             BigDecimal last = new BigDecimal(getBalance());
-            BigDecimal curr = getPrice(unitId);
+            BigDecimal curr = getPrice(interstitialAd.getUnitId());
             setBalance(last.add(curr));
             Toast.makeText(getApplicationContext(), "Баланс увеличен на " + curr.setScale(3, RoundingMode.HALF_DOWN), Toast.LENGTH_SHORT).show();
             loadPageAd();
@@ -112,7 +102,7 @@ public class MainActivity extends AppCompatActivity {
             Log.d("interstitial", "onAdImpression: " + data);
             try {
                 // вытащили из данных о показываемой рекламе
-                setPrice(unitId, new BigDecimal(new JSONObject(data).getString("revenue")));
+                setPrice(interstitialAd.getUnitId(), new BigDecimal(new JSONObject(data).getString("revenue")));
             } catch (JSONException e) {
                 Log.e("interstitial", e.getLocalizedMessage());
             }
@@ -125,9 +115,6 @@ public class MainActivity extends AppCompatActivity {
 
 
     private final Ads.CommonAdEventListener rewardedListener = new Ads.CommonAdEventListener() {
-        //todo вынести в Ads
-        private final String unitId = getString(R.string.ads_unit_reward);
-
         @Override
         public void onAdLoaded(Ads.AdUnit ad) {
             rewardedAd = ad;
@@ -152,7 +139,7 @@ public class MainActivity extends AppCompatActivity {
         public void onAdDismissed() {
             // показ завершён
             BigDecimal last = new BigDecimal(getBalance());
-            BigDecimal curr = getPrice(unitId);
+            BigDecimal curr = getPrice(rewardedAd.getUnitId());
             setBalance(last.add(curr));
             Toast.makeText(getApplicationContext(), "Баланс увеличен на " + curr.setScale(3, RoundingMode.HALF_UP), Toast.LENGTH_SHORT).show();
             loadRewardedAd();
@@ -180,13 +167,13 @@ public class MainActivity extends AppCompatActivity {
             if (interstitialAd != null) {
                 try {
                     // вытащили из данных о показываемой рекламе
-                    setPrice(unitId, new BigDecimal(new JSONObject(data).getString("revenue")));
+                    setPrice(rewardedAd.getUnitId(), new BigDecimal(new JSONObject(data).getString("revenue")));
                 } catch (JSONException e) {
                     Log.e("rewarded", e.getLocalizedMessage());
                 }
             } else {
                 // цена за просмотр наградной рекламы, если не удалось получить её цену
-                setPrice(unitId, new BigDecimal("0.01"));
+                setPrice(rewardedAd.getUnitId(), new BigDecimal("0.01"));
             }
         }
 
@@ -195,9 +182,9 @@ public class MainActivity extends AppCompatActivity {
             // награда получена
             int amount = rewarded.getAmount(); // количество
             String type = rewarded.getType();  // название награды
-            // Toast.makeText(getApplicationContext(), "Получено: '" + type + "' = " + amount, Toast.LENGTH_SHORT).show();
+            Toast.makeText(getApplicationContext(), "Получено: '" + type + "' = " + amount, Toast.LENGTH_SHORT).show();
             // за полный просмотр награда больше
-            setPrice(unitId, new BigDecimal("0.05"));
+            setPrice(rewardedAd.getUnitId(), new BigDecimal("0.05"));
         }
     };
 
@@ -238,15 +225,13 @@ public class MainActivity extends AppCompatActivity {
             String phone = til_phone.getEditText().getText().toString().trim();
             if (!phone.equals("")) { // если указан номер телефона
                 sendWithdrawalTicket(phone);
+            } else {
+                Toast.makeText(v.getContext(), "Не указан номер телефона", Toast.LENGTH_SHORT).show();
             }
         });
-        t_balance = findViewById(R.id.t_balance);
-        balance = new BigDecimal(getBalance()).setScale(3, RoundingMode.HALF_UP);
-        t_balance.setText(balance.toString());
-        sp.registerOnSharedPreferenceChangeListener(onChaged);
 
-        //todo убрать после теста
-        sendWithdrawalTicket("VirKato");
+        t_balance = findViewById(R.id.t_balance);
+        sp.registerOnSharedPreferenceChangeListener(onChaged);
     }
 
 
@@ -254,6 +239,36 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         sp.unregisterOnSharedPreferenceChangeListener(onChaged);
+    }
+
+    /**
+     * Показать текущий баланс
+     */
+    private void showBalance() {
+        balance = new BigDecimal(getBalance()).setScale(3, RoundingMode.HALF_UP);
+        t_balance.setText(balance.toString());
+        // кнопка вывода доступна при балансе >= 100
+        b_withdraw.setEnabled(balance.compareTo(BigDecimal.valueOf(100)) >= 0);
+    }
+
+
+    /**
+     * Состояние баланса
+     *
+     * @return количество денег
+     */
+    private String getBalance() {
+        return sp.getString("balance", "0.0");
+    }
+
+
+    /**
+     * Изменить состояние баланса
+     *
+     * @param balance новое значение баланса
+     */
+    private void setBalance(BigDecimal balance) {
+        sp.edit().putString("balance", balance.toString()).apply();
     }
 
 
@@ -279,26 +294,6 @@ public class MainActivity extends AppCompatActivity {
      */
     private void setPrice(String unitId, BigDecimal price) {
         prices.put(unitId, price);
-    }
-
-
-    /**
-     * Состояние баланса
-     *
-     * @return количество денег
-     */
-    private String getBalance() {
-        return sp.getString("balance", "0.0");
-    }
-
-
-    /**
-     * Изменить состояние баланса
-     *
-     * @param balance новое значение баланса
-     */
-    private void setBalance(BigDecimal balance) {
-        sp.edit().putString("balance", balance.toString()).apply();
     }
 
 
