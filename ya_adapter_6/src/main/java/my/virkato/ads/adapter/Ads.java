@@ -29,20 +29,29 @@ import com.yandex.mobile.ads.rewarded.RewardedAdLoader;
 
 public class Ads {
     public static class AdUnit {
-        private InterstitialAd iAd = null;
-        private RewardedAd rAd = null;
+        private final InterstitialAd iAd;
+        private final RewardedAd rAd;
+        private final String uId;
 
-        public AdUnit(InterstitialAd ad) {
+        public AdUnit(InterstitialAd ad, String unitId) {
             iAd = ad;
+            rAd = null;
+            uId = unitId;
         }
 
-        public AdUnit(RewardedAd ad) {
+        public AdUnit(RewardedAd ad, String unitId) {
+            iAd = null;
             rAd = ad;
+            uId = unitId;
         }
 
         public void show(/*@NonNull*/ Activity activity) {
             if (iAd != null) iAd.show(activity);
             if (rAd != null) rAd.show(activity);
+        }
+
+        public String getUnitId() {
+            return uId;
         }
     }
 
@@ -152,7 +161,7 @@ public class Ads {
         adLoader.setAdLoadListener(new InterstitialAdLoadListener() {
             @Override
             public void onAdLoaded(/*@NonNull*/ InterstitialAd loadedAd) {
-                AdUnit adUnit = new AdUnit(loadedAd);
+                AdUnit adUnit = new AdUnit(loadedAd, unitId);
                 loadedAd.setAdEventListener(new InterstitialAdEventListener() {
                     @Override
                     public void onAdShown() {
@@ -200,7 +209,7 @@ public class Ads {
         adLoader.setAdLoadListener(new RewardedAdLoadListener() {
             @Override
             public void onAdLoaded(/*@NonNull*/ RewardedAd loadedAd) {
-                AdUnit adUnit = new AdUnit(loadedAd);
+                AdUnit adUnit = new AdUnit(loadedAd, unitId);
                 loadedAd.setAdEventListener(new RewardedAdEventListener() {
                     @Override
                     public void onAdShown() {
