@@ -15,4 +15,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Yandex Ads Template"
 include(":app")
- 
+include(":ya_adapter_5")
+include(":ya_adapter_6")
