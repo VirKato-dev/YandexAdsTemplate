@@ -23,20 +23,29 @@ import com.yandex.mobile.ads.rewarded.RewardedAdEventListener;
 
 public class Ads {
     public static class AdUnit {
-        private InterstitialAd iAd = null;
-        private RewardedAd rAd = null;
+        private final InterstitialAd iAd;
+        private final RewardedAd rAd;
+        private final String uId;
 
-        public AdUnit(InterstitialAd ad) {
+        public AdUnit(InterstitialAd ad, String unitId) {
             iAd = ad;
+            rAd = null;
+            uId = unitId;
         }
 
-        public AdUnit(RewardedAd ad) {
+        public AdUnit(RewardedAd ad, String unitId) {
+            iAd = null;
             rAd = ad;
+            uId = unitId;
         }
 
         public void show(/*@NonNull*/ Activity activity) {
             if (iAd != null) iAd.show();
             if (rAd != null) rAd.show();
+        }
+
+        public String getUnitId() {
+            return uId;
         }
     }
 
@@ -147,7 +156,7 @@ public class Ads {
         interAd.setInterstitialAdEventListener(new InterstitialAdEventListener() {
             @Override
             public void onAdLoaded() {
-                AdUnit adUnit = new AdUnit(interAd);
+                AdUnit adUnit = new AdUnit(interAd, unitId);
                 if (interstitialListener != null) interstitialListener.onAdLoaded(adUnit);
             }
 
@@ -201,7 +210,7 @@ public class Ads {
         rewardAd.setRewardedAdEventListener(new RewardedAdEventListener() {
             @Override
             public void onAdLoaded() {
-                AdUnit adUnit = new AdUnit(rewardAd);
+                AdUnit adUnit = new AdUnit(rewardAd, unitId);
                 if (rewardedListener != null) rewardedListener.onAdLoaded(adUnit);
             }
 
