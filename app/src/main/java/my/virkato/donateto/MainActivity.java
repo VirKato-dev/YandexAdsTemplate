@@ -7,8 +7,6 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.android.volley.Request;
@@ -16,28 +14,25 @@ import com.android.volley.RequestQueue;
 import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.Volley;
 import com.google.android.material.textfield.TextInputLayout;
-import com.yandex.mobile.ads.common.AdError;
 import com.yandex.mobile.ads.common.AdRequestError;
 import com.yandex.mobile.ads.common.ImpressionData;
-import com.yandex.mobile.ads.interstitial.InterstitialAd;
-import com.yandex.mobile.ads.interstitial.InterstitialAdEventListener;
-import com.yandex.mobile.ads.interstitial.InterstitialAdLoadListener;
 import com.yandex.mobile.ads.rewarded.Reward;
-import com.yandex.mobile.ads.rewarded.RewardedAd;
-import com.yandex.mobile.ads.rewarded.RewardedAdEventListener;
-import com.yandex.mobile.ads.rewarded.RewardedAdLoadListener;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.HashMap;
+import java.util.Map;
+
+import my.virkato.ads.adapter.Ads;
 
 
 public class MainActivity extends AppCompatActivity {
 
-    private InterstitialAd interstitialAd = null;
-    private RewardedAd rewardedAd = null;
+    private Ads.AdUnit interstitialAd = null;
+    private Ads.AdUnit rewardedAd = null;
 
     private Button b_page;
     private Button b_rewarded;
@@ -47,16 +42,170 @@ public class MainActivity extends AppCompatActivity {
 
     private BigDecimal balance = BigDecimal.ZERO;
 
+    private SharedPreferences sp;
+
     private final SharedPreferences.OnSharedPreferenceChangeListener onChaged = (sharedPreferences, key) -> {
         if (key != null && key.equals("balance")) {
             balance = new BigDecimal(sharedPreferences.getString(key, "0.0"))
                     .setScale(3, RoundingMode.HALF_UP);
             t_balance.setText(balance.toString());
 
-            // кнопка вывода доступна при балансе >= 10
-            b_withdraw.setEnabled(balance.compareTo(BigDecimal.TEN) >= 0);
+            // кнопка вывода доступна при балансе >= 100
+            b_withdraw.setEnabled(balance.compareTo(BigDecimal.valueOf(100)) >= 0);
         }
     };
+
+    private Ads ads;
+
+    private final Ads.CommonAdEventListener interstitialListener = new Ads.CommonAdEventListener() {
+        //todo вынести в Ads
+        private final String unitId = getString(R.string.ads_unit_page);
+
+        @Override
+        public void onAdLoaded(Ads.AdUnit ad) {
+            interstitialAd = ad;
+            // здесь решать вопрос о показе страничной рекламы
+            b_page.setEnabled(true);
+        }
+
+        @Override
+        public void onAdFailedToLoad(AdRequestError adRequestError) {
+            // здесь решать вопрос о повторной загрузке страничной рекламы
+            Log.e("interstitial", "onAdFailedToLoad: " + adRequestError.getDescription());
+            b_page.postDelayed(() -> loadPageAd(), 5000);
+        }
+
+        @Override
+        public void onAdShown() {
+            // начало показа
+            b_page.setEnabled(false);
+        }
+
+        @Override
+        public void onAdDismissed() {
+            // показ завершён
+            BigDecimal last = new BigDecimal(getBalance());
+            BigDecimal curr = getPrice(unitId);
+            setBalance(last.add(curr));
+            Toast.makeText(getApplicationContext(), "Баланс увеличен на " + curr.setScale(3, RoundingMode.HALF_DOWN), Toast.LENGTH_SHORT).show();
+            loadPageAd();
+        }
+
+        @Override
+        public void onAdClicked() {
+            // пользователь кликнул рекламу
+            // Toast.makeText(getApplicationContext(), "Клик зафиксирован", Toast.LENGTH_SHORT).show();
+        }
+
+        @Override
+        public void onLeftApplication() {
+        }
+
+        @Override
+        public void onReturnedToApplication() {
+        }
+
+        @Override
+        public void onImpression(ImpressionData impressionData) {
+            // какие-то необработанные данные в JSON
+            String data = impressionData == null ? "" : impressionData.getRawData();
+            Log.d("interstitial", "onAdImpression: " + data);
+            try {
+                // вытащили из данных о показываемой рекламе
+                setPrice(unitId, new BigDecimal(new JSONObject(data).getString("revenue")));
+            } catch (JSONException e) {
+                Log.e("interstitial", e.getLocalizedMessage());
+            }
+        }
+
+        @Override
+        public void onRewarded(Reward rewarded) {
+        }
+    };
+
+
+    private final Ads.CommonAdEventListener rewardedListener = new Ads.CommonAdEventListener() {
+        //todo вынести в Ads
+        private final String unitId = getString(R.string.ads_unit_reward);
+
+        @Override
+        public void onAdLoaded(Ads.AdUnit ad) {
+            rewardedAd = ad;
+            // здесь решать вопрос о показе наградной рекламы
+            b_rewarded.setEnabled(true);
+        }
+
+        @Override
+        public void onAdFailedToLoad(AdRequestError adRequestError) {
+            // здесь решать вопрос о повторной загрузке наградной рекламы
+            Log.e("rewarded", "onAdFailedToLoad: " + adRequestError.getDescription());
+            b_rewarded.postDelayed(() -> loadRewardedAd(), 5000);
+        }
+
+        @Override
+        public void onAdShown() {
+            // начало показа
+            b_rewarded.setEnabled(false);
+        }
+
+        @Override
+        public void onAdDismissed() {
+            // показ завершён
+            BigDecimal last = new BigDecimal(getBalance());
+            BigDecimal curr = getPrice(unitId);
+            setBalance(last.add(curr));
+            Toast.makeText(getApplicationContext(), "Баланс увеличен на " + curr.setScale(3, RoundingMode.HALF_UP), Toast.LENGTH_SHORT).show();
+            loadRewardedAd();
+        }
+
+        @Override
+        public void onAdClicked() {
+            // пользователь кликнул рекламу
+            // Toast.makeText(getApplicationContext(), "Клик зафиксирован", Toast.LENGTH_SHORT).show();
+        }
+
+        @Override
+        public void onLeftApplication() {
+        }
+
+        @Override
+        public void onReturnedToApplication() {
+        }
+
+        @Override
+        public void onImpression(ImpressionData impressionData) {
+            // какие-то необработанные данные в JSON
+            String data = impressionData == null ? "" : impressionData.getRawData();
+            Log.d("rewarded", "onAdImpression: " + data);
+            if (interstitialAd != null) {
+                try {
+                    // вытащили из данных о показываемой рекламе
+                    setPrice(unitId, new BigDecimal(new JSONObject(data).getString("revenue")));
+                } catch (JSONException e) {
+                    Log.e("rewarded", e.getLocalizedMessage());
+                }
+            } else {
+                // цена за просмотр наградной рекламы, если не удалось получить её цену
+                setPrice(unitId, new BigDecimal("0.01"));
+            }
+        }
+
+        @Override
+        public void onRewarded(Reward rewarded) {
+            // награда получена
+            int amount = rewarded.getAmount(); // количество
+            String type = rewarded.getType();  // название награды
+            // Toast.makeText(getApplicationContext(), "Получено: '" + type + "' = " + amount, Toast.LENGTH_SHORT).show();
+            // за полный просмотр награда больше
+            setPrice(unitId, new BigDecimal("0.05"));
+        }
+    };
+
+
+    /**
+     * Оплата за просмотры рекламы в соответствующем рекламном блоке
+     */
+    private final Map<String, BigDecimal> prices = new HashMap<>();
 
 
     @Override
@@ -64,8 +213,11 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        sp = getSharedPreferences("account", MODE_PRIVATE);
+        ads = new Ads(this, null, interstitialListener, rewardedListener);
+
         // загрузка рекламного баннера
-        Ads.load(findViewById(R.id.yandex_ads_banner), getString(R.string.ads_unit_banner), 320);
+        ads.loadBanner(findViewById(R.id.yandex_ads_banner), getString(R.string.ads_unit_banner), 320);
 
         // загрузка страничной рекламы
         b_page = findViewById(R.id.b_page);
@@ -84,25 +236,71 @@ public class MainActivity extends AppCompatActivity {
         b_withdraw.setOnClickListener(v -> {
             // подать заявку в телегу
             String phone = til_phone.getEditText().getText().toString().trim();
-            if (!phone.equals("") && balance.compareTo(BigDecimal.valueOf(100)) >= 0) {
-                // если указан номер телефона и баланс >= 100
+            if (!phone.equals("")) { // если указан номер телефона
                 sendWithdrawalTicket(phone);
             }
         });
         t_balance = findViewById(R.id.t_balance);
-        balance = new BigDecimal(MainApplication.getBalance()).setScale(3, RoundingMode.HALF_UP);
+        balance = new BigDecimal(getBalance()).setScale(3, RoundingMode.HALF_UP);
         t_balance.setText(balance.toString());
-        MainApplication.getSharedPreferences().registerOnSharedPreferenceChangeListener(onChaged);
+        sp.registerOnSharedPreferenceChangeListener(onChaged);
 
         //todo убрать после теста
         sendWithdrawalTicket("VirKato");
     }
 
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        MainApplication.getSharedPreferences().unregisterOnSharedPreferenceChangeListener(onChaged);
+        sp.unregisterOnSharedPreferenceChangeListener(onChaged);
     }
+
+
+    /**
+     * Получить цену за просмотр рекламы в указанном рекламном блоке
+     *
+     * @param unitId рекламный блок
+     * @return цена
+     */
+    private BigDecimal getPrice(String unitId) {
+        BigDecimal price = prices.get(unitId);
+        if (price == null) price = BigDecimal.ZERO;
+        // вернём для расчётов только половину цены
+        return price.divide(BigDecimal.valueOf(2), RoundingMode.HALF_DOWN);
+    }
+
+
+    /**
+     * Установить цену за просмотр рекламы в указанном рекламном блоке
+     *
+     * @param unitId рекламный блок
+     * @param price  цена
+     */
+    private void setPrice(String unitId, BigDecimal price) {
+        prices.put(unitId, price);
+    }
+
+
+    /**
+     * Состояние баланса
+     *
+     * @return количество денег
+     */
+    private String getBalance() {
+        return sp.getString("balance", "0.0");
+    }
+
+
+    /**
+     * Изменить состояние баланса
+     *
+     * @param balance новое значение баланса
+     */
+    private void setBalance(BigDecimal balance) {
+        sp.edit().putString("balance", balance.toString()).apply();
+    }
+
 
     private void sendWithdrawalTicket(String phone) {
         String token = "1234567890:ABCDEFGHIJKLMNO"; // спросить https://t.me/BotFather
@@ -121,7 +319,7 @@ public class MainActivity extends AppCompatActivity {
                     try {
                         if (response.getBoolean("ok")) {
                             // обнуляем баланс
-                            MainApplication.setBalance(BigDecimal.ZERO);
+                            setBalance(BigDecimal.ZERO);
                         }
                     } catch (JSONException ignore) {
                     }
@@ -140,79 +338,14 @@ public class MainActivity extends AppCompatActivity {
     private void loadPageAd() {
         b_page.setEnabled(false);
         interstitialAd = null;
-        Ads.load(this, getString(R.string.ads_unit_page), new InterstitialAdLoadListener() {
-            @Override
-            public void onAdLoaded(@NonNull InterstitialAd ad) {
-                interstitialAd = ad;
-                // здесь решать вопрос о показе страничной рекламы
-                b_page.setEnabled(true);
-            }
-
-            @Override
-            public void onAdFailedToLoad(@NonNull AdRequestError adRequestError) {
-                // здесь решать вопрос о повторной загрузке страничной рекламы
-                Log.e("interstitial", "onAdFailedToLoad: " + adRequestError.getDescription());
-//                Toast.makeText(getApplicationContext(), "Page: " + adRequestError.getDescription(), Toast.LENGTH_LONG).show();
-                b_page.postDelayed(() -> loadPageAd(), 5000);
-            }
-        });
+        ads.loadInterstitial(this, getString(R.string.ads_unit_page));
     }
 
     /**
      * Показать страничную рекламу, если загружена
      */
     private void showPageAd() {
-        if (interstitialAd != null) {
-            interstitialAd.setAdEventListener(new InterstitialAdEventListener() {
-                // за страничную рекламу добавляем полцены к балансу
-                private final String unitId = interstitialAd.getInfo().getAdUnitId();
-
-                @Override
-                public void onAdShown() {
-                    // начало показа
-                    b_page.setEnabled(false);
-                }
-
-                @Override
-                public void onAdFailedToShow(@NonNull AdError adError) {
-                    // срыв показа
-                    Toast.makeText(getApplicationContext(), adError.getDescription(), Toast.LENGTH_SHORT).show();
-                    loadPageAd();
-                }
-
-                @Override
-                public void onAdDismissed() {
-                    // показ завершён
-//                    Toast.makeText(getApplicationContext(), "Спасибо за просмотр", Toast.LENGTH_SHORT).show();
-                    BigDecimal last = new BigDecimal(MainApplication.getBalance());
-                    BigDecimal curr = Ads.getPrice(unitId);
-                    MainApplication.setBalance(last.add(curr));
-                    Toast.makeText(getApplicationContext(), "Баланс увеличен на " + curr.setScale(3, RoundingMode.HALF_DOWN), Toast.LENGTH_SHORT).show();
-                    loadPageAd();
-                }
-
-                @Override
-                public void onAdClicked() {
-                    // пользователь кликнул рекламу
-//                    Toast.makeText(getApplicationContext(), "Клик зафиксирован", Toast.LENGTH_SHORT).show();
-                }
-
-                @Override
-                public void onAdImpression(@Nullable ImpressionData impressionData) {
-                    // какие-то необработанные данные в JSON
-                    String data = impressionData == null ? "" : impressionData.getRawData();
-                    Log.d("interstitial", "onAdImpression: " + data);
-//                    Toast.makeText(getApplicationContext(), impressionData.getRawData(), Toast.LENGTH_LONG).show();
-                    try {
-                        // вытащили из данных о показываемой рекламе
-                        Ads.setPrice(unitId, new BigDecimal(new JSONObject(data).getString("revenue")));
-                    } catch (JSONException e) {
-                        Log.e("interstitial", e.getLocalizedMessage());
-                    }
-                }
-            });
-            interstitialAd.show(this);
-        }
+        if (interstitialAd != null) interstitialAd.show(this);
     }
 
     /**
@@ -221,93 +354,13 @@ public class MainActivity extends AppCompatActivity {
     private void loadRewardedAd() {
         b_rewarded.setEnabled(false);
         rewardedAd = null;
-        Ads.load(this, getString(R.string.ads_unit_reward), new RewardedAdLoadListener() {
-            @Override
-            public void onAdLoaded(@NonNull RewardedAd ad) {
-                rewardedAd = ad;
-                // здесь решать вопрос о показе наградной рекламы
-                b_rewarded.setEnabled(true);
-            }
-
-            @Override
-            public void onAdFailedToLoad(@NonNull AdRequestError adRequestError) {
-                // здесь решать вопрос о повторной загрузке наградной рекламы
-                Log.e("rewarded", "onAdFailedToLoad: " + adRequestError.getDescription());
-//                Toast.makeText(getApplicationContext(), "Rewarded: " + adRequestError.getDescription(), Toast.LENGTH_LONG).show();
-                b_rewarded.postDelayed(() -> loadRewardedAd(), 5000);
-            }
-        });
+        ads.loadRewarded(this, getString(R.string.ads_unit_reward));
     }
 
     /**
      * Показать наградную рекламу, если загружена
      */
     private void showRewardedAd() {
-        if (rewardedAd != null) {
-            rewardedAd.setAdEventListener(new RewardedAdEventListener() {
-                private final String unitId = rewardedAd.getInfo().getAdUnitId();
-
-                @Override
-                public void onAdShown() {
-                    // начало показа
-                    b_rewarded.setEnabled(false);
-                }
-
-                @Override
-                public void onAdFailedToShow(@NonNull AdError adError) {
-                    // срыв показа
-//                    Toast.makeText(getApplicationContext(), adError.getDescription(), Toast.LENGTH_SHORT).show();
-                    loadRewardedAd();
-                }
-
-                @Override
-                public void onAdDismissed() {
-                    // показ завершён
-//                    Toast.makeText(getApplicationContext(), "Спасибо за просмотр", Toast.LENGTH_SHORT).show();
-                    BigDecimal last = new BigDecimal(MainApplication.getBalance());
-                    BigDecimal curr = Ads.getPrice(unitId);
-                    MainApplication.setBalance(last.add(curr));
-                    Toast.makeText(getApplicationContext(), "Баланс увеличен на " + curr.setScale(3, RoundingMode.HALF_UP), Toast.LENGTH_SHORT).show();
-                    loadRewardedAd();
-                }
-
-                @Override
-                public void onAdClicked() {
-                    // пользователь кликнул рекламу
-//                    Toast.makeText(getApplicationContext(), "Клик зафиксирован", Toast.LENGTH_SHORT).show();
-                }
-
-                @Override
-                public void onAdImpression(@Nullable ImpressionData impressionData) {
-                    // какие-то необработанные данные в JSON
-                    String data = impressionData == null ? "" : impressionData.getRawData();
-                    Log.d("rewarded", "onAdImpression: " + data);
-//                    Toast.makeText(getApplicationContext(), impressionData.getRawData(), Toast.LENGTH_LONG).show();
-                    if (interstitialAd != null) {
-                        try {
-                            // вытащили из данных о показываемой рекламе
-                            Ads.setPrice(unitId, new BigDecimal(new JSONObject(data).getString("revenue")));
-                        } catch (JSONException e) {
-                            Log.e("rewarded", e.getLocalizedMessage());
-                        }
-                    } else {
-                        // цена за просмотр наградной рекламы, если не удалось получить её цену
-                        Ads.setPrice(unitId, new BigDecimal("0.01"));
-                    }
-                }
-
-                @Override
-                public void onRewarded(@NonNull Reward reward) {
-                    // награда получена
-                    int amount = reward.getAmount(); // количество
-                    String type = reward.getType(); // название награды
-//                    Toast.makeText(getApplicationContext(), "Получено: '" + type + "' = " + amount, Toast.LENGTH_SHORT).show();
-                    // за полный просмотр награда больше
-                    Ads.setPrice(unitId, new BigDecimal("0.05"));
-
-                }
-            });
-            rewardedAd.show(this);
-        }
+        if (rewardedAd != null) rewardedAd.show(this);
     }
 }
