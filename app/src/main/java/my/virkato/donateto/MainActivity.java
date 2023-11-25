@@ -23,33 +23,54 @@ import org.json.JSONObject;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.HashMap;
-import java.util.Map;
 
 import my.virkato.ads.adapter.Ads;
 
 
 public class MainActivity extends AppCompatActivity {
 
-    private Ads.AdUnit interstitialAd = null;
-    private Ads.AdUnit rewardedAd = null;
-
     private Button b_page;
+
     private Button b_rewarded;
+
     private TextView t_balance;
+
     private Button b_withdraw;
+
     private TextInputLayout til_phone;
 
-    private BigDecimal balance = BigDecimal.ZERO;
 
-    private SharedPreferences sp;
+    /**
+     * Текущий баланс
+     */
+    private BalanceStorage bs;
 
-    private final SharedPreferences.OnSharedPreferenceChangeListener onChaged = (sharedPreferences, key) -> {
+    /**
+     * Слушатель текущего баланса
+     */
+    private final SharedPreferences.OnSharedPreferenceChangeListener onChanged = (sharedPreferences, key) -> {
         if (key != null && key.equals("balance")) showBalance();
     };
 
+
+    /**
+     * Адаптер к текущей библиотеке РСЯ
+     */
     private Ads ads;
 
+    /**
+     * Текущий блок страничной рекламы
+     */
+    private Ads.AdUnit interstitialAd = null;
+
+    /**
+     * Текущий блок наградной рекламы
+     */
+    private Ads.AdUnit rewardedAd = null;
+
+    /**
+     * Слушатель страничной рекламы
+     */
     private final Ads.CommonAdEventListener interstitialListener = new Ads.CommonAdEventListener() {
         @Override
         public void onAdLoaded(Ads.AdUnit ad) {
@@ -74,9 +95,9 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onAdDismissed() {
             // показ завершён
-            BigDecimal last = new BigDecimal(getBalance());
-            BigDecimal curr = getPrice(interstitialAd.getUnitId());
-            setBalance(last.add(curr));
+            BigDecimal last = bs.getBalance(false);
+            BigDecimal curr = PriceStorage.getPrice(interstitialAd.getUnitId());
+            bs.setBalance(last.add(curr));
             Toast.makeText(getApplicationContext(), "Баланс увеличен на " + curr.setScale(3, RoundingMode.HALF_DOWN), Toast.LENGTH_SHORT).show();
             loadPageAd();
         }
@@ -97,14 +118,17 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void onImpression(ImpressionData impressionData) {
-            // какие-то необработанные данные в JSON
-            String data = impressionData == null ? "" : impressionData.getRawData();
-            Log.d("interstitial", "onAdImpression: " + data);
-            try {
-                // вытащили из данных о показываемой рекламе
-                setPrice(interstitialAd.getUnitId(), new BigDecimal(new JSONObject(data).getString("revenue")));
-            } catch (JSONException e) {
-                Log.e("interstitial", e.getLocalizedMessage());
+            // можно назначить фиксированную плату за просмотр страничной рекламы
+            PriceStorage.setPrice(interstitialAd.getUnitId(), new BigDecimal("0.05"));
+            if (false) { // либо получить стоимость оплаты от РСЯ
+                String data = impressionData == null ? "" : impressionData.getRawData();
+                Log.d("interstitial", "onAdImpression: " + data);
+                try {
+                    // вытащили из данных о показываемой рекламе
+                    PriceStorage.setPrice(interstitialAd.getUnitId(), new BigDecimal(new JSONObject(data).getString("revenue")));
+                } catch (JSONException e) {
+                    Log.e("interstitial", e.getLocalizedMessage());
+                }
             }
         }
 
@@ -114,6 +138,9 @@ public class MainActivity extends AppCompatActivity {
     };
 
 
+    /**
+     * Слушатель наградной рекламы
+     */
     private final Ads.CommonAdEventListener rewardedListener = new Ads.CommonAdEventListener() {
         @Override
         public void onAdLoaded(Ads.AdUnit ad) {
@@ -138,9 +165,9 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onAdDismissed() {
             // показ завершён
-            BigDecimal last = new BigDecimal(getBalance());
-            BigDecimal curr = getPrice(rewardedAd.getUnitId());
-            setBalance(last.add(curr));
+            BigDecimal last = bs.getBalance(false);
+            BigDecimal curr = PriceStorage.getPrice(rewardedAd.getUnitId());
+            bs.setBalance(last.add(curr));
             Toast.makeText(getApplicationContext(), "Баланс увеличен на " + curr.setScale(3, RoundingMode.HALF_UP), Toast.LENGTH_SHORT).show();
             loadRewardedAd();
         }
@@ -161,19 +188,19 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void onImpression(ImpressionData impressionData) {
-            // какие-то необработанные данные в JSON
-            String data = impressionData == null ? "" : impressionData.getRawData();
-            Log.d("rewarded", "onAdImpression: " + data);
-            if (interstitialAd != null) {
-                try {
-                    // вытащили из данных о показываемой рекламе
-                    setPrice(rewardedAd.getUnitId(), new BigDecimal(new JSONObject(data).getString("revenue")));
-                } catch (JSONException e) {
-                    Log.e("rewarded", e.getLocalizedMessage());
+            // можно назначить фиксированную плату за просмотр страничной рекламы
+            PriceStorage.setPrice(rewardedAd.getUnitId(), new BigDecimal("0.1"));
+            if (false) { // либо получить стоимость оплаты от РСЯ
+                String data = impressionData == null ? "" : impressionData.getRawData();
+                Log.d("rewarded", "onAdImpression: " + data);
+                if (rewardedAd != null) {
+                    try {
+                        // вытащили из данных о показываемой рекламе
+                        PriceStorage.setPrice(rewardedAd.getUnitId(), new BigDecimal(new JSONObject(data).getString("revenue")));
+                    } catch (JSONException e) {
+                        Log.e("rewarded", e.getLocalizedMessage());
+                    }
                 }
-            } else {
-                // цена за просмотр наградной рекламы, если не удалось получить её цену
-                setPrice(rewardedAd.getUnitId(), new BigDecimal("0.01"));
             }
         }
 
@@ -184,23 +211,18 @@ public class MainActivity extends AppCompatActivity {
             String type = rewarded.getType();  // название награды
             Toast.makeText(getApplicationContext(), "Получено: '" + type + "' = " + amount, Toast.LENGTH_SHORT).show();
             // за полный просмотр награда больше
-            setPrice(rewardedAd.getUnitId(), new BigDecimal("0.05"));
+            PriceStorage.setPrice(rewardedAd.getUnitId(), new BigDecimal("0.5"));
         }
     };
 
-
-    /**
-     * Оплата за просмотры рекламы в соответствующем рекламном блоке
-     */
-    private final Map<String, BigDecimal> prices = new HashMap<>();
-
+    // ОСНОВНАЯ ЛОГИКА
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        sp = getSharedPreferences("account", MODE_PRIVATE);
+        bs = new BalanceStorage(this);
         ads = new Ads(this, null, interstitialListener, rewardedListener);
 
         // загрузка рекламного баннера
@@ -231,79 +253,38 @@ public class MainActivity extends AppCompatActivity {
         });
 
         t_balance = findViewById(R.id.t_balance);
-        sp.registerOnSharedPreferenceChangeListener(onChaged);
+        bs.startListening(onChanged);
     }
 
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        sp.unregisterOnSharedPreferenceChangeListener(onChaged);
+        bs.stopListening(onChanged);
     }
+
 
     /**
      * Показать текущий баланс
      */
     private void showBalance() {
-        balance = new BigDecimal(getBalance()).setScale(3, RoundingMode.HALF_UP);
-        t_balance.setText(balance.toString());
+        t_balance.setText(bs.getBalance(true).toString());
         // кнопка вывода доступна при балансе >= 100
-        b_withdraw.setEnabled(balance.compareTo(BigDecimal.valueOf(100)) >= 0);
+        b_withdraw.setEnabled(bs.getBalance(false).compareTo(BigDecimal.valueOf(100)) >= 0);
     }
 
 
     /**
-     * Состояние баланса
-     *
-     * @return количество денег
+     * Оповестить себя через телеграм о заявке на вывод средств
+     * @param phone номер телефона пользователя
      */
-    private String getBalance() {
-        return sp.getString("balance", "0.0");
-    }
-
-
-    /**
-     * Изменить состояние баланса
-     *
-     * @param balance новое значение баланса
-     */
-    private void setBalance(BigDecimal balance) {
-        sp.edit().putString("balance", balance.toString()).apply();
-    }
-
-
-    /**
-     * Получить цену за просмотр рекламы в указанном рекламном блоке
-     *
-     * @param unitId рекламный блок
-     * @return цена
-     */
-    private BigDecimal getPrice(String unitId) {
-        BigDecimal price = prices.get(unitId);
-        if (price == null) price = BigDecimal.ZERO;
-        // вернём для расчётов только половину цены
-        return price.divide(BigDecimal.valueOf(2), RoundingMode.HALF_DOWN);
-    }
-
-
-    /**
-     * Установить цену за просмотр рекламы в указанном рекламном блоке
-     *
-     * @param unitId рекламный блок
-     * @param price  цена
-     */
-    private void setPrice(String unitId, BigDecimal price) {
-        prices.put(unitId, price);
-    }
-
-
     private void sendWithdrawalTicket(String phone) {
         String token = "1234567890:ABCDEFGHIJKLMNO"; // спросить https://t.me/BotFather
         String url = "https://api.telegram.org/bot" + token + "/sendMessage";
         JSONObject jo = new JSONObject();
         try {
             jo.put("chat_id", "1234567890"); // спросить https://t.me/getmyid_bot
-            jo.put("text", "Withdrawal ticket from " + phone + " for " + balance);
+            jo.put("text", "Withdrawal ticket from " + phone + " for " + bs.getBalance(true));
         } catch (JSONException ignored) {
         }
 
@@ -314,7 +295,7 @@ public class MainActivity extends AppCompatActivity {
                     try {
                         if (response.getBoolean("ok")) {
                             // обнуляем баланс
-                            setBalance(BigDecimal.ZERO);
+                            bs.setBalance(BigDecimal.ZERO);
                         }
                     } catch (JSONException ignore) {
                     }
@@ -336,12 +317,14 @@ public class MainActivity extends AppCompatActivity {
         ads.loadInterstitial(this, getString(R.string.ads_unit_page));
     }
 
+
     /**
      * Показать страничную рекламу, если загружена
      */
     private void showPageAd() {
         if (interstitialAd != null) interstitialAd.show(this);
     }
+
 
     /**
      * Загрузить наградную рекламу
@@ -351,6 +334,7 @@ public class MainActivity extends AppCompatActivity {
         rewardedAd = null;
         ads.loadRewarded(this, getString(R.string.ads_unit_reward));
     }
+
 
     /**
      * Показать наградную рекламу, если загружена
