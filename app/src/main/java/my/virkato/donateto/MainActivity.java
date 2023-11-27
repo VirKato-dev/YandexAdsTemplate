@@ -59,6 +59,11 @@ public class MainActivity extends AppCompatActivity {
      */
     private static final BigDecimal REWARD_PART_INT = new BigDecimal("0.05");
 
+    /**
+     * Задержка перед следующей попыткой загрузки рекламы
+     */
+    private static final long DELAY = 5000L;
+
 
     /**
      * Текущий баланс
@@ -103,7 +108,7 @@ public class MainActivity extends AppCompatActivity {
         public void onAdFailedToLoad(AdRequestError adRequestError) {
             // здесь решать вопрос о повторной загрузке страничной рекламы
             Log.e("interstitial", "onAdFailedToLoad: " + adRequestError.getDescription());
-            b_page.postDelayed(() -> loadPageAd(), 5000);
+            b_page.postDelayed(() -> loadPageAd(), DELAY);
         }
 
         @Override
@@ -173,7 +178,7 @@ public class MainActivity extends AppCompatActivity {
         public void onAdFailedToLoad(AdRequestError adRequestError) {
             // здесь решать вопрос о повторной загрузке наградной рекламы
             Log.e("rewarded", "onAdFailedToLoad: " + adRequestError.getDescription());
-            b_rewarded.postDelayed(() -> loadRewardedAd(), 5000);
+            b_rewarded.postDelayed(() -> loadRewardedAd(), DELAY);
         }
 
         @Override
