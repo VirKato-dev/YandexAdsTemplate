@@ -42,7 +42,7 @@ public class MainActivity extends AppCompatActivity {
     /**
      * Минимальная сумма на вывод
      */
-    private static final double MIN_MONEY = 100;
+    private static final BigDecimal MIN_MONEY = new BigDecimal("100");
 
     /**
      * Вознаграждение за полный просмотр наградной рекламы
@@ -292,12 +292,13 @@ public class MainActivity extends AppCompatActivity {
     private void showBalance() {
         t_balance.setText(bs.getBalance(true).toString());
         // кнопка вывода доступна при балансе >= MIN_MONEY
-        b_withdraw.setEnabled(bs.getBalance(false).compareTo(BigDecimal.valueOf(MIN_MONEY)) >= 0);
+        b_withdraw.setEnabled(bs.getBalance(false).compareTo(MIN_MONEY) >= 0);
     }
 
 
     /**
      * Оповестить себя через телеграм о заявке на вывод средств
+     *
      * @param phone номер телефона пользователя
      */
     private void sendWithdrawalTicket(String phone) {
