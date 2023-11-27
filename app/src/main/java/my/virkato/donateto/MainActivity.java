@@ -39,6 +39,26 @@ public class MainActivity extends AppCompatActivity {
 
     private TextInputLayout til_phone;
 
+    /**
+     * Минимальная сумма на вывод
+     */
+    private static final double MIN_MONEY = 100;
+
+    /**
+     * Вознаграждение за полный просмотр наградной рекламы
+     */
+    private static final BigDecimal REWARD_FULL = new BigDecimal("0.5");
+
+    /**
+     * Вознаграждение за неполный просмотр наградной рекламы
+     */
+    private static final BigDecimal REWARD_PART_REW = new BigDecimal("0.1");
+
+    /**
+     * Вознаграждение за неполный просмотр страничной рекламы
+     */
+    private static final BigDecimal REWARD_PART_INT = new BigDecimal("0.05");
+
 
     /**
      * Текущий баланс
@@ -119,7 +139,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onImpression(ImpressionData impressionData) {
             // можно назначить фиксированную плату за просмотр страничной рекламы
-            PriceStorage.setPrice(interstitialAd.getUnitId(), new BigDecimal("0.05"));
+            PriceStorage.setPrice(interstitialAd.getUnitId(), REWARD_PART_INT);
             if (false) { // либо получить стоимость оплаты от РСЯ
                 String data = impressionData == null ? "" : impressionData.getRawData();
                 Log.d("interstitial", "onAdImpression: " + data);
@@ -189,7 +209,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onImpression(ImpressionData impressionData) {
             // можно назначить фиксированную плату за просмотр страничной рекламы
-            PriceStorage.setPrice(rewardedAd.getUnitId(), new BigDecimal("0.1"));
+            PriceStorage.setPrice(rewardedAd.getUnitId(), REWARD_PART_REW);
             if (false) { // либо получить стоимость оплаты от РСЯ
                 String data = impressionData == null ? "" : impressionData.getRawData();
                 Log.d("rewarded", "onAdImpression: " + data);
@@ -211,7 +231,7 @@ public class MainActivity extends AppCompatActivity {
             String type = rewarded.getType();  // название награды
             Toast.makeText(getApplicationContext(), "Получено: '" + type + "' = " + amount, Toast.LENGTH_SHORT).show();
             // за полный просмотр награда больше
-            PriceStorage.setPrice(rewardedAd.getUnitId(), new BigDecimal("0.5"));
+            PriceStorage.setPrice(rewardedAd.getUnitId(), REWARD_FULL);
         }
     };
 
@@ -271,8 +291,8 @@ public class MainActivity extends AppCompatActivity {
      */
     private void showBalance() {
         t_balance.setText(bs.getBalance(true).toString());
-        // кнопка вывода доступна при балансе >= 100
-        b_withdraw.setEnabled(bs.getBalance(false).compareTo(BigDecimal.valueOf(100)) >= 0);
+        // кнопка вывода доступна при балансе >= MIN_MONEY
+        b_withdraw.setEnabled(bs.getBalance(false).compareTo(BigDecimal.valueOf(MIN_MONEY)) >= 0);
     }
 
 
