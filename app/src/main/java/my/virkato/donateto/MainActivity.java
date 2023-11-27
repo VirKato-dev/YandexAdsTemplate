@@ -55,7 +55,7 @@ public class MainActivity extends AppCompatActivity {
     private static final BigDecimal REWARD_PART_REW = new BigDecimal("0.1");
 
     /**
-     * Вознаграждение за неполный просмотр страничной рекламы
+     * Вознаграждение за просмотр страничной рекламы
      */
     private static final BigDecimal REWARD_PART_INT = new BigDecimal("0.05");
 
