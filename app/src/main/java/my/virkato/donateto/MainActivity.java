@@ -254,6 +254,8 @@ public class MainActivity extends AppCompatActivity {
 
         t_balance = findViewById(R.id.t_balance);
         bs.startListening(onChanged);
+
+        showBalance();
     }
 
 
